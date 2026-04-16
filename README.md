@@ -128,7 +128,7 @@ VAPID_PRIVATE_KEY=
 
 ## Generare le chiavi VAPID
 
-Le chiavi VAPID sono necessarie per inviare notifiche push al browser. Generale una sola volta:
+Le chiavi VAPID sono necessarie per inviare notifiche push al browser. Genera le chiavi una sola volta:
 
 ```bash
 npx web-push generate-vapid-keys

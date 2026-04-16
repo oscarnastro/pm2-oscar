@@ -146,7 +146,7 @@ async function startPm2Bus() {
       const label = procEvent === 'error' ? 'Errore' : `Crash (exit ${proc.exit_code})`;
       sendPushToAll({
         title: `⚠️ ${proc.name || 'Processo'} – ${label}`,
-        body: `Processo "${proc.name}" si è fermato in modo inatteso.\nClicca per aprire la dashboard.`,
+        body: `Processo "${proc.name}" si e' fermato in modo inatteso.\nClicca per aprire la dashboard.`,
         tag: `pm2-crash-${proc.pm_id}`,
         url: '/'
       }).catch(() => {});
