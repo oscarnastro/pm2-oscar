@@ -1,4 +1,5 @@
 const session = require('express-session');
+const MemoryStore = require('memorystore')(session);
 
 const SESSION_SECRET = process.env.SESSION_SECRET || 'changeme_super_secret';
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
@@ -18,6 +19,7 @@ const sessionMiddleware = session({
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
+  store: new MemoryStore({ checkPeriod: 1000 * 60 * 60 }),
   cookie: {
     httpOnly: true,
     sameSite: 'strict',

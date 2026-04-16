@@ -20,7 +20,7 @@
   <body>
     <header class="navbar glass-card">
       <div class="brand">
-        <i data-lucide="activity"></i>
+        <i data-lucide="server"></i>
         <span>PM2 Oscar</span>
       </div>
       <div class="navbar-actions">
@@ -43,11 +43,14 @@
       <section class="panel glass-card logs-panel">
         <div class="toolbar">
           <h2>Log viewer</h2>
-          <select id="tail-lines">
-            <option value="50">50 righe</option>
-            <option value="100" selected>100 righe</option>
-            <option value="200">200 righe</option>
-          </select>
+          <div class="toolbar-actions">
+            <select id="tail-lines">
+              <option value="50">50 righe</option>
+              <option value="100" selected>100 righe</option>
+              <option value="200">200 righe</option>
+            </select>
+            <button id="clear-logs" class="btn" title="Pulisci log">Pulisci</button>
+          </div>
         </div>
         <pre id="logs" class="logs"></pre>
       </section>
