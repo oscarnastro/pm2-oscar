@@ -11,6 +11,8 @@ const { sessionMiddleware, requireAuthPage, validateCredentials } = require('./a
 const apiRouter = require('./routes/api');
 const logsRouter = require('./routes/logs');
 const { connectPm2, launchBus } = require('./pm2-client');
+const pushRouter = require('./routes/push');
+const { sendPushToAll } = require('./push-service');
 
 const app = express();
 const port = Number(process.env.PORT) || 3003;
@@ -94,6 +96,7 @@ app.get('/index.html', pageLimiter, requireAuthPage, (_req, res) => {
 
 app.use('/api', apiRouter);
 app.use('/logs', logsRouter);
+app.use('/api/push', pushRouter);
 app.use(express.static(path.join(__dirname, 'public')));
 
 const server = app.listen(port, () => {
@@ -129,6 +132,25 @@ async function startPm2Bus() {
 
     bus.on('log:out', emit('out'));
     bus.on('log:err', emit('err'));
+
+    bus.on('process:event', (packet) => {
+      const procEvent = packet.event;
+      const proc = packet.process || {};
+
+      const isUnexpectedStop =
+        (procEvent === 'exit' && proc.exit_code !== 0) ||
+        procEvent === 'error';
+
+      if (!isUnexpectedStop) return;
+
+      const label = procEvent === 'error' ? 'Errore' : `Crash (exit ${proc.exit_code})`;
+      sendPushToAll({
+        title: `⚠️ ${proc.name || 'Processo'} – ${label}`,
+        body: `Processo "${proc.name}" si è fermato in modo inatteso.\nClicca per aprire la dashboard.`,
+        tag: `pm2-crash-${proc.pm_id}`,
+        url: '/'
+      }).catch(() => {});
+    });
   });
 }
 

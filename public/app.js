@@ -2,11 +2,15 @@ const processListEl = document.getElementById('process-list');
 const logsEl = document.getElementById('logs');
 const refreshBtn = document.getElementById('refresh');
 const logoutBtn = document.getElementById('logout');
+const notifBtn = document.getElementById('notif-toggle');
 const tailSelect = document.getElementById('tail-lines');
 
 let selectedProcessId = null;
 let ws;
 let csrfToken = '';
+let swRegistration = null;
+
+// ── Utilities ───────────────────────────────────────────────────────────────
 
 const statusClass = (status) => {
   if (status === 'online') return 'online';
@@ -28,6 +32,15 @@ const formatUptime = (uptime) => {
   return `${h}h ${m}m ${s}s`;
 };
 
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+// ── API helper ───────────────────────────────────────────────────────────────
+
 const api = async (url, options = {}) => {
   const method = (options.method || 'GET').toUpperCase();
   const headers = {
@@ -38,10 +51,7 @@ const api = async (url, options = {}) => {
     headers['x-csrf-token'] = csrfToken;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers
-  });
+  const response = await fetch(url, { ...options, headers });
 
   if (response.status === 401) {
     window.location.href = '/login.html';
@@ -58,6 +68,8 @@ async function loadCsrf() {
   const payload = await response.json().catch(() => ({}));
   csrfToken = payload.csrfToken || '';
 }
+
+// ── Processes ─────────────────────────────────────────────────────────────────
 
 async function loadProcesses() {
   const data = await api('/api/processes');
@@ -102,6 +114,8 @@ async function runAction(action, id) {
   await loadProcesses();
 }
 
+// ── Logs ─────────────────────────────────────────────────────────────────────
+
 async function loadTail() {
   if (!selectedProcessId) return;
   const lines = tailSelect.value;
@@ -125,6 +139,88 @@ function openWs() {
   };
 }
 
+// ── PWA & Push Notifications ─────────────────────────────────────────────────
+
+async function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    swRegistration = await navigator.serviceWorker.register('/sw.js');
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('Service Worker registration failed:', err);
+  }
+}
+
+function updateNotifButton(subscribed) {
+  if (!notifBtn) return;
+  const icon = notifBtn.querySelector('[data-lucide]');
+  if (subscribed) {
+    notifBtn.title = 'Disattiva notifiche';
+    notifBtn.classList.add('active');
+    if (icon) icon.setAttribute('data-lucide', 'bell-dot');
+  } else {
+    notifBtn.title = 'Attiva notifiche';
+    notifBtn.classList.remove('active');
+    if (icon) icon.setAttribute('data-lucide', 'bell');
+  }
+  if (window.lucide) window.lucide.createIcons();
+}
+
+async function getCurrentSubscription() {
+  if (!swRegistration) return null;
+  return swRegistration.pushManager.getSubscription();
+}
+
+async function subscribePush() {
+  if (!swRegistration) return;
+
+  const statusData = await api('/api/push/status').catch(() => null);
+  if (!statusData || !statusData.enabled) {
+    alert('Le notifiche push non sono configurate sul server.\nImposta le variabili VAPID nel file .env.');
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    alert('Permesso notifiche negato. Abilitalo nelle impostazioni del browser.');
+    return;
+  }
+
+  try {
+    const { publicKey } = await api('/api/push/vapid-public-key');
+    const sub = await swRegistration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey)
+    });
+    await api('/api/push/subscribe', { method: 'POST', body: JSON.stringify(sub) });
+    updateNotifButton(true);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('Errore durante la sottoscrizione push:', err);
+    alert('Impossibile attivare le notifiche: ' + err.message);
+  }
+}
+
+async function unsubscribePush() {
+  const sub = await getCurrentSubscription();
+  if (sub) {
+    await api('/api/push/subscribe', { method: 'DELETE', body: JSON.stringify(sub) }).catch(() => {});
+    await sub.unsubscribe();
+  }
+  updateNotifButton(false);
+}
+
+async function initPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    if (notifBtn) notifBtn.style.display = 'none';
+    return;
+  }
+  const sub = await getCurrentSubscription();
+  updateNotifButton(!!sub);
+}
+
+// ── Event listeners ──────────────────────────────────────────────────────────
+
 processListEl.addEventListener('click', async (event) => {
   const button = event.target.closest('button[data-action]');
   if (!button) return;
@@ -133,7 +229,6 @@ processListEl.addEventListener('click', async (event) => {
 });
 
 refreshBtn.addEventListener('click', () => loadProcesses());
-
 tailSelect.addEventListener('change', () => loadTail());
 
 logoutBtn.addEventListener('click', async () => {
@@ -141,6 +236,24 @@ logoutBtn.addEventListener('click', async () => {
   window.location.href = '/login.html';
 });
 
-loadCsrf().then(() => loadProcesses()).then(() => {
-  if (window.lucide) window.lucide.createIcons();
+if (notifBtn) {
+  notifBtn.addEventListener('click', async () => {
+    const sub = await getCurrentSubscription();
+    if (sub) {
+      await unsubscribePush();
+    } else {
+      await subscribePush();
+    }
+  });
+}
+
+// ── Bootstrap ────────────────────────────────────────────────────────────────
+
+registerServiceWorker().then(() => {
+  loadCsrf()
+    .then(() => Promise.all([loadProcesses(), initPush()]))
+    .then(() => {
+      if (window.lucide) window.lucide.createIcons();
+    });
 });
+

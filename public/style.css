@@ -48,6 +48,23 @@ body {
   font-weight: 700;
 }
 
+.navbar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-icon {
+  padding: 8px;
+  line-height: 0;
+}
+
+.btn-icon.active {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.2);
+  color: var(--accent);
+}
+
 .container {
   padding: 12px;
   display: grid;
