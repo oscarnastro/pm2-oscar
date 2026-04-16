@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PM2 Oscar - Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#6366f1" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PM2 Oscar" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+  </head>
+  <body class="login-page">
+    <main class="login-wrap">
+      <section class="glass-card login-card">
+        <h1>PM2 Oscar</h1>
+        <p>Accesso sicuro dashboard</p>
+        <form id="login-form">
+          <label>
+            Username
+            <input name="username" type="text" autocomplete="username" required />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit" class="btn btn-primary">Accedi</button>
+          <p id="login-error" class="error"></p>
+        </form>
+      </section>
+    </main>
+    <script>
+      const form = document.getElementById('login-form');
+      const errorEl = document.getElementById('login-error');
+      let csrfToken = '';
+
+      async function loadCsrf() {
+        const response = await fetch('/auth/csrf');
+        const payload = await response.json();
+        csrfToken = payload.csrfToken || '';
+      }
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        errorEl.textContent = '';
+        const formData = new FormData(form);
+        const body = Object.fromEntries(formData.entries());
+
+        const response = await fetch('/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-csrf-token': csrfToken
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          errorEl.textContent = payload.error || 'Accesso fallito';
+          return;
+        }
+
+        window.location.href = '/';
+      });
+
+      loadCsrf();
+    </script>
+  </body>
+</html>

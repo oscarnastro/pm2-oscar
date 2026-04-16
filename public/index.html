@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard PM2 Oscar</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#6366f1" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PM2 Oscar" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+  </head>
+  <body>
+    <header class="navbar glass-card">
+      <div class="brand">
+        <i data-lucide="activity"></i>
+        <span>PM2 Oscar</span>
+      </div>
+      <div class="navbar-actions">
+        <button id="notif-toggle" class="btn btn-icon" title="Attiva notifiche" aria-label="Notifiche push">
+          <i data-lucide="bell"></i>
+        </button>
+        <button id="logout" class="btn">Esci</button>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="panel glass-card">
+        <div class="toolbar">
+          <h2>Processi</h2>
+          <button id="refresh" class="btn">Aggiorna</button>
+        </div>
+        <div id="process-list" class="process-grid"></div>
+      </section>
+
+      <section class="panel glass-card logs-panel">
+        <div class="toolbar">
+          <h2>Log viewer</h2>
+          <select id="tail-lines">
+            <option value="50">50 righe</option>
+            <option value="100" selected>100 righe</option>
+            <option value="200">200 righe</option>
+          </select>
+        </div>
+        <pre id="logs" class="logs"></pre>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
