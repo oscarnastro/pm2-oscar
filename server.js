@@ -97,6 +97,10 @@ app.get('/index.html', pageLimiter, requireAuthPage, (_req, res) => {
 app.use('/api', apiRouter);
 app.use('/logs', logsRouter);
 app.use('/api/push', pushRouter);
+app.get('/sw.js', pageLimiter, (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'public', 'sw.js'));
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 const server = app.listen(port, () => {

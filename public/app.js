@@ -142,10 +142,30 @@ function openWs() {
 
 // ── PWA & Push Notifications ─────────────────────────────────────────────────
 
+let swListenersRegistered = false;
+
 async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   try {
-    swRegistration = await navigator.serviceWorker.register('/sw.js');
+    swRegistration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
+
+    if (!swListenersRegistered) {
+      swListenersRegistered = true;
+
+      swRegistration.addEventListener('updatefound', () => {
+        const newWorker = swRegistration.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            newWorker.postMessage({ type: 'SKIP_WAITING' });
+          }
+        });
+      });
+
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        window.location.reload();
+      });
+    }
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('Service Worker registration failed:', err);
