@@ -4,6 +4,7 @@ const refreshBtn = document.getElementById('refresh');
 const logoutBtn = document.getElementById('logout');
 const notifBtn = document.getElementById('notif-toggle');
 const tailSelect = document.getElementById('tail-lines');
+const clearLogsBtn = document.getElementById('clear-logs');
 
 let selectedProcessId = null;
 let ws;
@@ -95,7 +96,7 @@ async function loadProcesses() {
         <button class="btn" data-action="restart" data-id="${proc.id}">Riavvia</button>
         <button class="btn" data-action="delete" data-id="${proc.id}">Elimina</button>
       </div>
-      <button class="btn" data-action="logs" data-id="${proc.id}">Apri log</button>
+      <button class="btn logs-btn" data-action="logs" data-id="${proc.id}">Apri log</button>
     `;
     processListEl.appendChild(card);
   });
@@ -230,6 +231,12 @@ processListEl.addEventListener('click', async (event) => {
 
 refreshBtn.addEventListener('click', () => loadProcesses());
 tailSelect.addEventListener('change', () => loadTail());
+
+if (clearLogsBtn) {
+  clearLogsBtn.addEventListener('click', () => {
+    logsEl.textContent = '';
+  });
+}
 
 logoutBtn.addEventListener('click', async () => {
   await api('/auth/logout', { method: 'POST' });

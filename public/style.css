@@ -82,6 +82,12 @@ body {
   gap: 8px;
 }
 
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .process-grid {
   margin-top: 12px;
   display: grid;
@@ -142,6 +148,11 @@ body {
   gap: 8px;
 }
 
+.logs-btn {
+  margin-top: 8px;
+  width: 100%;
+}
+
 .btn {
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.08);
@@ -174,6 +185,8 @@ body {
   overflow: auto;
   font-size: 12px;
   color: #dbeafe;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .login-page {
