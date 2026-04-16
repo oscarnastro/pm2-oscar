@@ -1,35 +1,8 @@
 const express = require('express');
-const pm2 = require('pm2');
 const { requireAuth } = require('../auth');
+const { connectPm2, listPm2, pm2Action } = require('../pm2-client');
 
 const router = express.Router();
-
-function connectPm2() {
-  return new Promise((resolve, reject) => {
-    pm2.connect((err) => {
-      if (err) return reject(err);
-      return resolve();
-    });
-  });
-}
-
-function pm2Action(action, target) {
-  return new Promise((resolve, reject) => {
-    pm2[action](target, (err, data) => {
-      if (err) return reject(err);
-      return resolve(data);
-    });
-  });
-}
-
-function listPm2() {
-  return new Promise((resolve, reject) => {
-    pm2.list((err, list) => {
-      if (err) return reject(err);
-      return resolve(list);
-    });
-  });
-}
 
 router.use(requireAuth);
 
@@ -49,7 +22,9 @@ router.get('/processes', async (_req, res) => {
     }));
     return res.json({ processes: items });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    // eslint-disable-next-line no-console
+    console.error('Failed to list PM2 processes', error);
+    return res.status(500).json({ error: 'Unable to list PM2 processes' });
   }
 });
 
@@ -59,7 +34,9 @@ router.post('/processes/:id/start', async (req, res) => {
     await pm2Action('start', req.params.id);
     return res.json({ ok: true });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    // eslint-disable-next-line no-console
+    console.error('Failed to start PM2 process', error);
+    return res.status(500).json({ error: 'Unable to start process' });
   }
 });
 
@@ -69,7 +46,9 @@ router.post('/processes/:id/stop', async (req, res) => {
     await pm2Action('stop', req.params.id);
     return res.json({ ok: true });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    // eslint-disable-next-line no-console
+    console.error('Failed to stop PM2 process', error);
+    return res.status(500).json({ error: 'Unable to stop process' });
   }
 });
 
@@ -79,7 +58,9 @@ router.post('/processes/:id/restart', async (req, res) => {
     await pm2Action('restart', req.params.id);
     return res.json({ ok: true });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    // eslint-disable-next-line no-console
+    console.error('Failed to restart PM2 process', error);
+    return res.status(500).json({ error: 'Unable to restart process' });
   }
 });
 
@@ -89,7 +70,9 @@ router.delete('/processes/:id', async (req, res) => {
     await pm2Action('delete', req.params.id);
     return res.json({ ok: true });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    // eslint-disable-next-line no-console
+    console.error('Failed to delete PM2 process', error);
+    return res.status(500).json({ error: 'Unable to delete process' });
   }
 });
 

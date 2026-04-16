@@ -13,7 +13,7 @@
     <main class="login-wrap">
       <section class="glass-card login-card">
         <h1>PM2 Oscar</h1>
-        <p>Secure Dashboard Access</p>
+        <p>Accesso sicuro dashboard</p>
         <form id="login-form">
           <label>
             Username
@@ -23,7 +23,7 @@
             Password
             <input name="password" type="password" autocomplete="current-password" required />
           </label>
-          <button type="submit" class="btn btn-primary">Login</button>
+          <button type="submit" class="btn btn-primary">Accedi</button>
           <p id="login-error" class="error"></p>
         </form>
       </section>
@@ -31,6 +31,13 @@
     <script>
       const form = document.getElementById('login-form');
       const errorEl = document.getElementById('login-error');
+      let csrfToken = '';
+
+      async function loadCsrf() {
+        const response = await fetch('/auth/csrf');
+        const payload = await response.json();
+        csrfToken = payload.csrfToken || '';
+      }
 
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -40,18 +47,23 @@
 
         const response = await fetch('/auth/login', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-csrf-token': csrfToken
+          },
           body: JSON.stringify(body)
         });
 
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
-          errorEl.textContent = payload.error || 'Login failed';
+          errorEl.textContent = payload.error || 'Accesso fallito';
           return;
         }
 
         window.location.href = '/';
       });
+
+      loadCsrf();
     </script>
   </body>
 </html>

@@ -34,7 +34,7 @@ ADMIN_PASSWORD=changeme123
 JWT_SECRET=changeme_jwt_secret
 ```
 
-> `JWT_SECRET` è presente per compatibilità con la configurazione richiesta, ma l'app usa sessioni cookie firmate (`express-session`).
+`JWT_SECRET` viene usato come entropia aggiuntiva per la generazione dei token CSRF di sessione.
 
 ## Avvio
 

@@ -1,17 +1,25 @@
 require('dotenv').config();
 
 const path = require('node:path');
+const crypto = require('node:crypto');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { WebSocketServer } = require('ws');
-const pm2 = require('pm2');
+const WebSocket = require('ws');
 
 const { sessionMiddleware, requireAuthPage, validateCredentials } = require('./auth');
 const apiRouter = require('./routes/api');
 const logsRouter = require('./routes/logs');
+const { connectPm2, launchBus } = require('./pm2-client');
 
 const app = express();
 const port = Number(process.env.PORT) || 3003;
+const csrfEntropy = process.env.JWT_SECRET || 'changeme_jwt_secret';
+
+if (csrfEntropy === 'changeme_jwt_secret') {
+  // eslint-disable-next-line no-console
+  console.warn('Warning: using default JWT_SECRET. Set JWT_SECRET in .env');
+}
 
 app.set('trust proxy', 1);
 app.use(express.json());
@@ -23,6 +31,38 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many login attempts, retry later.' }
+});
+
+const pageLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+app.use((req, _res, next) => {
+  if (!req.session.csrfToken) {
+    req.session.csrfToken = crypto
+      .createHash('sha256')
+      .update(`${crypto.randomUUID()}:${csrfEntropy}`)
+      .digest('hex');
+  }
+  next();
+});
+
+app.use((req, res, next) => {
+  const isSafeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+  if (isSafeMethod) return next();
+
+  const csrfHeader = req.headers['x-csrf-token'];
+  if (!csrfHeader || csrfHeader !== req.session.csrfToken) {
+    return res.status(403).json({ error: 'Invalid CSRF token' });
+  }
+  return next();
+});
+
+app.get('/auth/csrf', (req, res) => {
+  res.json({ csrfToken: req.session.csrfToken });
 });
 
 app.get('/login', (_req, res) => res.redirect('/login.html'));
@@ -44,11 +84,11 @@ app.post('/auth/logout', (req, res) => {
   });
 });
 
-app.get('/', requireAuthPage, (_req, res) => {
+app.get('/', pageLimiter, requireAuthPage, (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.get('/index.html', requireAuthPage, (_req, res) => {
+app.get('/index.html', pageLimiter, requireAuthPage, (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -63,18 +103,9 @@ const server = app.listen(port, () => {
 
 const wsClients = new Set();
 
-function connectPm2() {
-  return new Promise((resolve, reject) => {
-    pm2.connect((err) => {
-      if (err) return reject(err);
-      return resolve();
-    });
-  });
-}
-
 async function startPm2Bus() {
   await connectPm2();
-  pm2.launchBus((err, bus) => {
+  launchBus((err, bus) => {
     if (err) return;
 
     const emit = (type) => (packet) => {
@@ -88,7 +119,7 @@ async function startPm2Bus() {
 
       for (const client of wsClients) {
         if (
-          client.readyState === 1 &&
+          client.readyState === WebSocket.OPEN &&
           (!client.processId || client.processId === String(packet.process.pm_id))
         ) {
           client.send(payload);
@@ -101,7 +132,10 @@ async function startPm2Bus() {
   });
 }
 
-startPm2Bus().catch(() => {});
+startPm2Bus().catch((error) => {
+  // eslint-disable-next-line no-console
+  console.error('Failed to start PM2 log bus', error);
+});
 
 const wss = new WebSocketServer({ noServer: true });
 

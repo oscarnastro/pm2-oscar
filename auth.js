@@ -4,6 +4,15 @@ const SESSION_SECRET = process.env.SESSION_SECRET || 'changeme_super_secret';
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme123';
 
+if (SESSION_SECRET === 'changeme_super_secret') {
+  // eslint-disable-next-line no-console
+  console.warn('Warning: using default SESSION_SECRET. Set a strong secret in .env');
+}
+if (ADMIN_USERNAME === 'admin' && ADMIN_PASSWORD === 'changeme123') {
+  // eslint-disable-next-line no-console
+  console.warn('Warning: using default admin credentials. Change ADMIN_USERNAME/ADMIN_PASSWORD');
+}
+
 const sessionMiddleware = session({
   name: 'pm2.dashboard.sid',
   secret: SESSION_SECRET,
@@ -11,7 +20,7 @@ const sessionMiddleware = session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: 'strict',
     secure: process.env.NODE_ENV === 'production',
     maxAge: 1000 * 60 * 60 * 8
   }

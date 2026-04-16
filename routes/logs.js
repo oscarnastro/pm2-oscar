@@ -1,27 +1,9 @@
 const express = require('express');
 const fs = require('node:fs/promises');
-const pm2 = require('pm2');
 const { requireAuth } = require('../auth');
+const { connectPm2, describeProcess } = require('../pm2-client');
 
 const router = express.Router();
-
-function connectPm2() {
-  return new Promise((resolve, reject) => {
-    pm2.connect((err) => {
-      if (err) return reject(err);
-      return resolve();
-    });
-  });
-}
-
-function describeProcess(id) {
-  return new Promise((resolve, reject) => {
-    pm2.describe(id, (err, desc) => {
-      if (err) return reject(err);
-      return resolve(desc && desc[0]);
-    });
-  });
-}
 
 async function readTail(path, lines) {
   if (!path) return [];
@@ -57,7 +39,9 @@ router.get('/processes/:id/tail', async (req, res) => {
       ].slice(-lines)
     });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    // eslint-disable-next-line no-console
+    console.error('Failed to read PM2 logs', error);
+    return res.status(500).json({ error: 'Unable to read logs' });
   }
 });
 

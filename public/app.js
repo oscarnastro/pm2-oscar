@@ -6,6 +6,7 @@ const tailSelect = document.getElementById('tail-lines');
 
 let selectedProcessId = null;
 let ws;
+let csrfToken = '';
 
 const statusClass = (status) => {
   if (status === 'online') return 'online';
@@ -28,12 +29,18 @@ const formatUptime = (uptime) => {
 };
 
 const api = async (url, options = {}) => {
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {})
+  };
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && csrfToken) {
+    headers['x-csrf-token'] = csrfToken;
+  }
+
   const response = await fetch(url, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {})
-    }
+    headers
   });
 
   if (response.status === 401) {
@@ -42,9 +49,15 @@ const api = async (url, options = {}) => {
   }
 
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'Request failed');
+  if (!response.ok) throw new Error(payload.error || 'Richiesta fallita');
   return payload;
 };
+
+async function loadCsrf() {
+  const response = await fetch('/auth/csrf');
+  const payload = await response.json().catch(() => ({}));
+  csrfToken = payload.csrfToken || '';
+}
 
 async function loadProcesses() {
   const data = await api('/api/processes');
@@ -65,10 +78,10 @@ async function loadProcesses() {
         <span>PID: ${proc.pid || '-'} · Restart: ${proc.restarts}</span>
       </div>
       <div class="actions">
-        <button class="btn" data-action="start" data-id="${proc.id}">Start</button>
-        <button class="btn" data-action="stop" data-id="${proc.id}">Stop</button>
-        <button class="btn" data-action="restart" data-id="${proc.id}">Restart</button>
-        <button class="btn" data-action="delete" data-id="${proc.id}">Delete</button>
+        <button class="btn" data-action="start" data-id="${proc.id}">Avvia</button>
+        <button class="btn" data-action="stop" data-id="${proc.id}">Ferma</button>
+        <button class="btn" data-action="restart" data-id="${proc.id}">Riavvia</button>
+        <button class="btn" data-action="delete" data-id="${proc.id}">Elimina</button>
       </div>
       <button class="btn" data-action="logs" data-id="${proc.id}">Apri log</button>
     `;
@@ -124,10 +137,10 @@ refreshBtn.addEventListener('click', () => loadProcesses());
 tailSelect.addEventListener('change', () => loadTail());
 
 logoutBtn.addEventListener('click', async () => {
-  await fetch('/auth/logout', { method: 'POST' });
+  await api('/auth/logout', { method: 'POST' });
   window.location.href = '/login.html';
 });
 
-loadProcesses().then(() => {
+loadCsrf().then(() => loadProcesses()).then(() => {
   if (window.lucide) window.lucide.createIcons();
 });
