@@ -7,12 +7,30 @@ const rateLimit = require('express-rate-limit');
 const { WebSocketServer } = require('ws');
 const WebSocket = require('ws');
 
-const { sessionMiddleware, requireAuthPage, validateCredentials } = require('./auth');
+const {
+  sessionMiddleware,
+  requireAuth,
+  requireAuthPage,
+  validateCredentials,
+  updateUserPasswordById,
+  listSessions,
+  revokeOtherSessions
+} = require('./auth');
 const apiRouter = require('./routes/api');
 const logsRouter = require('./routes/logs');
-const { connectPm2, launchBus } = require('./pm2-client');
+const usersRouter = require('./routes/users');
+const eventsRouter = require('./routes/events');
+const { connectPm2, listPm2, launchBus } = require('./pm2-client');
 const pushRouter = require('./routes/push');
 const { sendPushToAll } = require('./push-service');
+const { recordStats } = require('./stats-store');
+const { appendEvent } = require('./events-store');
+
+const RESTART_LOOP_THRESHOLD = Number(process.env.RESTART_LOOP_THRESHOLD) || 5;
+const RESTART_LOOP_WINDOW_MS = Number(process.env.RESTART_LOOP_WINDOW_MS) || 60000;
+const NOTIFY_ON_RESTART = process.env.NOTIFY_ON_RESTART === 'true';
+
+const restartWindows = new Map();
 
 const app = express();
 const port = Number(process.env.PORT) || 3003;
@@ -63,6 +81,18 @@ app.use((req, res, next) => {
   return next();
 });
 
+// ── Public endpoints ──────────────────────────────────────────────────────────
+
+app.get('/health', async (_req, res) => {
+  try {
+    await connectPm2();
+    const list = await listPm2();
+    return res.json({ status: 'ok', uptime: process.uptime(), processCount: list.length });
+  } catch {
+    return res.json({ status: 'ok', uptime: process.uptime(), processCount: 0 });
+  }
+});
+
 app.get('/auth/csrf', (req, res) => {
   res.json({ csrfToken: req.session.csrfToken });
 });
@@ -71,11 +101,14 @@ app.get('/login', (_req, res) => res.redirect('/login.html'));
 
 app.post('/auth/login', loginLimiter, (req, res) => {
   const { username, password } = req.body || {};
-  if (!validateCredentials(username, password)) {
+  const user = validateCredentials(username, password);
+  if (!user) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
   req.session.authenticated = true;
-  req.session.username = username;
+  req.session.username = user.username;
+  req.session.userId = user.id;
+  req.session.role = user.role;
   return res.json({ ok: true });
 });
 
@@ -84,6 +117,43 @@ app.post('/auth/logout', (req, res) => {
     res.clearCookie('pm2.dashboard.sid');
     res.json({ ok: true });
   });
+});
+
+app.get('/auth/me', requireAuth, (req, res) => {
+  res.json({ username: req.session.username, role: req.session.role });
+});
+
+app.post('/auth/change-password', requireAuth, (req, res) => {
+  const { oldPassword, newPassword } = req.body || {};
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ error: 'oldPassword and newPassword required' });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: 'New password must be at least 8 characters' });
+  }
+  const user = validateCredentials(req.session.username, oldPassword);
+  if (!user) {
+    return res.status(401).json({ error: 'Current password is incorrect' });
+  }
+  try {
+    updateUserPasswordById(user.id, newPassword);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/auth/sessions', requireAuth, (req, res) => {
+  const sessions = listSessions().map((s) => ({
+    ...s,
+    current: s.sessionId === req.sessionID
+  }));
+  return res.json({ sessions });
+});
+
+app.delete('/auth/sessions/others', requireAuth, (req, res) => {
+  revokeOtherSessions(req.sessionID);
+  return res.json({ ok: true });
 });
 
 app.get('/', pageLimiter, requireAuthPage, (_req, res) => {
@@ -97,6 +167,8 @@ app.get('/index.html', pageLimiter, requireAuthPage, (_req, res) => {
 app.use('/api', apiRouter);
 app.use('/logs', logsRouter);
 app.use('/api/push', pushRouter);
+app.use('/api/users', usersRouter);
+app.use('/api/events', eventsRouter);
 app.get('/sw.js', pageLimiter, (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, 'public', 'sw.js'));
@@ -112,6 +184,19 @@ const wsClients = new Set();
 
 async function startPm2Bus() {
   await connectPm2();
+
+  // Stats collection every 5s
+  setInterval(async () => {
+    try {
+      const list = await listPm2();
+      for (const p of list) {
+        recordStats(p.pm_id, p.name, p.monit?.cpu || 0, p.monit?.memory || 0);
+      }
+    } catch {
+      // ignore transient errors
+    }
+  }, 5000);
+
   launchBus((err, bus) => {
     if (err) return;
 
@@ -141,19 +226,58 @@ async function startPm2Bus() {
       const procEvent = packet.event;
       const proc = packet.process || {};
 
+      // Crash / error detection
       const isUnexpectedStop =
-        (procEvent === 'exit' && proc.exit_code !== 0) ||
-        procEvent === 'error';
+        (procEvent === 'exit' && proc.exit_code !== 0) || procEvent === 'error';
 
-      if (!isUnexpectedStop) return;
+      if (isUnexpectedStop) {
+        const label = procEvent === 'error' ? 'error' : 'exit';
+        appendEvent({
+          ts: Date.now(),
+          processName: proc.name,
+          processId: proc.pm_id,
+          event: label,
+          exitCode: proc.exit_code ?? null
+        });
 
-      const label = procEvent === 'error' ? 'Errore' : `Crash (exit ${proc.exit_code})`;
-      sendPushToAll({
-        title: `⚠️ ${proc.name || 'Processo'} – ${label}`,
-        body: `Processo "${proc.name}" si e' fermato in modo inatteso.\nClicca per aprire la dashboard.`,
-        tag: `pm2-crash-${proc.pm_id}`,
-        url: '/'
-      }).catch(() => {});
+        sendPushToAll({
+          title: `⚠️ ${proc.name || 'Processo'} – ${procEvent === 'error' ? 'Errore' : `Crash (exit ${proc.exit_code})`}`,
+          body: `Processo "${proc.name}" si e' fermato in modo inatteso.\nClicca per aprire la dashboard.`,
+          tag: `pm2-crash-${proc.pm_id}`,
+          url: '/'
+        }).catch(() => {});
+      }
+
+      // Restart loop detection
+      if (procEvent === 'restart') {
+        const key = String(proc.pm_id);
+        const now = Date.now();
+        if (!restartWindows.has(key)) restartWindows.set(key, []);
+        const times = restartWindows.get(key);
+        times.push(now);
+        // Remove timestamps outside window
+        const cutoff = now - RESTART_LOOP_WINDOW_MS;
+        while (times.length && times[0] < cutoff) times.shift();
+        if (times.length >= RESTART_LOOP_THRESHOLD) {
+          times.length = 0; // reset to avoid repeated alerts
+          sendPushToAll({
+            title: `🔁 Loop di restart rilevato: ${proc.name}`,
+            body: `Il processo "${proc.name}" ha eseguito ${RESTART_LOOP_THRESHOLD}+ restart in ${Math.round(RESTART_LOOP_WINDOW_MS / 1000)}s.`,
+            tag: `pm2-loop-${proc.pm_id}`,
+            url: '/'
+          }).catch(() => {});
+        }
+      }
+
+      // Push on successful restart (optional)
+      if (NOTIFY_ON_RESTART && (procEvent === 'online' || procEvent === 'restart')) {
+        sendPushToAll({
+          title: `✅ ${proc.name} – Riavviato`,
+          body: `Il processo "${proc.name}" è tornato online.`,
+          tag: `pm2-restart-${proc.pm_id}`,
+          url: '/'
+        }).catch(() => {});
+      }
     });
   });
 }
