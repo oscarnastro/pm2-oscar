@@ -1,7 +1,9 @@
+const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
+const dotenv = require('dotenv');
 const { requireAuth, requireWriteAccess, requireAdmin } = require('../auth');
-const { connectPm2, listPm2, pm2Action, describeProcess, startProcess, restartWithEnv, scaleProcess } = require('../pm2-client');
+const { connectPm2, listPm2, pm2Action, describeProcess, startProcess, scaleProcess } = require('../pm2-client');
 const { getHistory } = require('../stats-store');
 
 const router = express.Router();
@@ -10,21 +12,35 @@ router.use(requireAuth);
 const SECRET_KEYS = /secret|password|pass|key|token|auth|credential/i;
 
 /**
- * Extract user-facing environment variables from the pm2_env object.
- * pm2_env.env contains only vars explicitly set in ecosystem.config.js,
- * so we use that sub-object rather than pm2_env itself (which holds the
- * full runtime environment including all system variables).
+ * Read and parse the .env file located in the given working directory.
+ * Returns the parsed key/value object, or null if the file does not exist.
  */
-function extractEnv(pm2Env) {
-  if (!pm2Env || typeof pm2Env !== 'object') return {};
-  const configuredEnv = pm2Env.env;
-  if (!configuredEnv || typeof configuredEnv !== 'object') return {};
-  const result = {};
-  for (const [k, v] of Object.entries(configuredEnv)) {
-    if (v !== null && typeof v === 'object') continue; // skip nested objects
-    result[k] = v;
+function readDotEnvFile(cwd) {
+  if (!cwd || typeof cwd !== 'string') return null;
+  const envPath = path.join(cwd, '.env');
+  try {
+    const raw = fs.readFileSync(envPath, 'utf8');
+    return dotenv.parse(raw);
+  } catch {
+    return null;
   }
-  return result;
+}
+
+/**
+ * Write key/value pairs back to {cwd}/.env.
+ * Values containing whitespace, quotes, or shell-special characters are
+ * double-quoted; all other values are written as bare KEY=VALUE pairs.
+ */
+function writeDotEnvFile(cwd, env) {
+  const envPath = path.join(cwd, '.env');
+  const lines = Object.entries(env).map(([k, v]) => {
+    const val = String(v ?? '');
+    if (val === '' || /[\s"'`#\\$!]/.test(val)) {
+      return `${k}="${val.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+    }
+    return `${k}=${val}`;
+  });
+  fs.writeFileSync(envPath, lines.join('\n') + '\n', 'utf8');
 }
 
 function maskEnv(env) {
@@ -70,7 +86,9 @@ router.get('/processes/:id/detail', async (req, res) => {
     await connectPm2();
     const proc = await describeProcess(req.params.id);
     if (!proc) return res.status(404).json({ error: 'Process not found' });
-    const env = maskEnv(extractEnv(proc.pm2_env));
+    const cwd = proc.pm2_env?.pm_cwd;
+    const parsed = readDotEnvFile(cwd);
+    const env = parsed ? maskEnv(parsed) : null;
     return res.json({
       id: proc.pm_id,
       name: proc.name,
@@ -79,13 +97,14 @@ router.get('/processes/:id/detail', async (req, res) => {
       execMode: proc.pm2_env?.exec_mode,
       instances: proc.pm2_env?.instances,
       script: proc.pm2_env?.pm_exec_path,
-      cwd: proc.pm2_env?.pm_cwd,
+      cwd,
       args: proc.pm2_env?.args,
       nodeVersion: proc.pm2_env?.node_version,
       createdAt: proc.pm2_env?.created_at,
       restarts: proc.pm2_env?.restart_time,
       unstableRestarts: proc.pm2_env?.unstable_restarts,
-      env
+      env,
+      envFileExists: parsed !== null
     });
   } catch (error) {
     console.error('Failed to describe PM2 process', error);
@@ -98,7 +117,10 @@ router.get('/processes/:id/env', async (req, res) => {
     await connectPm2();
     const proc = await describeProcess(req.params.id);
     if (!proc) return res.status(404).json({ error: 'Process not found' });
-    return res.json({ env: maskEnv(extractEnv(proc.pm2_env)) });
+    const cwd = proc.pm2_env?.pm_cwd;
+    const parsed = readDotEnvFile(cwd);
+    if (!parsed) return res.json({ env: {}, envFileExists: false, cwd: cwd || null });
+    return res.json({ env: maskEnv(parsed), envFileExists: true, cwd });
   } catch (error) {
     console.error('Failed to get env', error);
     return res.status(500).json({ error: 'Unable to get env' });
@@ -110,7 +132,12 @@ router.put('/processes/:id/env', requireWriteAccess, async (req, res) => {
     const env = req.body?.env;
     if (!env || typeof env !== 'object') return res.status(400).json({ error: 'env object required' });
     await connectPm2();
-    await restartWithEnv(req.params.id, env);
+    const proc = await describeProcess(req.params.id);
+    if (!proc) return res.status(404).json({ error: 'Process not found' });
+    const cwd = proc.pm2_env?.pm_cwd;
+    if (!cwd) return res.status(400).json({ error: 'Process has no working directory' });
+    writeDotEnvFile(cwd, env);
+    await pm2Action('restart', req.params.id);
     return res.json({ ok: true });
   } catch (error) {
     console.error('Failed to update env', error);
