@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pm2-oscar-v1';
+const CACHE_NAME = 'pm2-oscar-v2';
 const CACHED_URLS = [
   '/login.html',
   '/style.css'
@@ -17,6 +17,12 @@ self.addEventListener('activate', (event) => {
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', (event) => {
