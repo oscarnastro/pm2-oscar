@@ -32,6 +32,8 @@ let rawLogLines = [];       // {type, line} array of current log
 let currentEnvData = {};    // for env modal
 let currentEnvProcId = null;
 
+const MAX_LOG_LINES = 500;
+
 // ── Utilities ────────────────────────────────────────────────────────────────
 
 const statusClass = (s) => (s === 'online' ? 'online' : s === 'errored' ? 'errored' : 'stopped');
@@ -304,6 +306,7 @@ function openWs() {
     const msg = JSON.parse(event.data);
     if (msg.event !== 'log') return;
     rawLogLines.push({ type: msg.type, line: String(msg.line).trimEnd() });
+    if (rawLogLines.length > MAX_LOG_LINES) rawLogLines.shift();
     renderLogs();
   };
 }
@@ -350,16 +353,14 @@ async function openDetailModal(id) {
 
 // ── Env modal ─────────────────────────────────────────────────────────────────
 
-async function openEnvModal(id) {
-  const data = await api(`/api/processes/${id}/env`).catch((err) => { alert(err.message); return null; });
-  if (!data) return;
-  currentEnvData = data.env || {};
-  currentEnvProcId = id;
-  const isAdmin = currentRole === 'admin';
-  const saveBtn = document.getElementById('btn-save-env');
-  saveBtn.style.display = isAdmin ? '' : 'none';
+function renderEnvTable(isAdmin, filter) {
+  const entries = Object.entries(currentEnvData);
+  const q = (filter || '').toLowerCase();
+  const filtered = q
+    ? entries.filter(([k, v]) => k.toLowerCase().includes(q) || String(v).toLowerCase().includes(q))
+    : entries;
 
-  const rows = Object.entries(currentEnvData).map(([k, v]) => `
+  const rows = filtered.map(([k, v]) => `
     <tr>
       <td>${escapeHtml(k)}</td>
       <td>${isAdmin
@@ -369,17 +370,41 @@ async function openEnvModal(id) {
     </tr>
   `).join('');
 
-  document.getElementById('env-content').innerHTML = rows
-    ? `<table class="env-table"><thead><tr><th>Chiave</th><th>Valore</th></tr></thead><tbody>${rows}</tbody></table>`
-    : '<p style="color:var(--muted)">Nessuna variabile</p>';
+  const countNote = `<p style="font-size:12px;color:var(--muted);margin:0 0 6px">${filtered.length} di ${entries.length} variabili</p>`;
+  const searchInput = `<input type="search" id="env-search" placeholder="Cerca variabile…" value="${escapeHtml(filter || '')}" style="width:100%;margin-bottom:8px;padding:6px 10px;box-sizing:border-box" />`;
+  const tableHtml = rows
+    ? `<div style="overflow-y:auto;max-height:50vh"><table class="env-table"><thead><tr><th>Chiave</th><th>Valore</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    : '<p style="color:var(--muted)">Nessun risultato</p>';
+
+  document.getElementById('env-content').innerHTML = (entries.length ? countNote : '') + searchInput + (entries.length ? tableHtml : '<p style="color:var(--muted)">Nessuna variabile</p>');
+
+  const searchEl = document.getElementById('env-search');
+  if (searchEl) {
+    searchEl.focus();
+    searchEl.addEventListener('input', (e) => renderEnvTable(isAdmin, e.target.value));
+  }
+
+  if (isAdmin) {
+    document.querySelectorAll('#env-content input[data-key]').forEach((inp) => {
+      inp.addEventListener('input', () => { currentEnvData[inp.dataset.key] = inp.value; });
+    });
+  }
+}
+
+async function openEnvModal(id) {
+  const data = await api(`/api/processes/${id}/env`).catch((err) => { alert(err.message); return null; });
+  if (!data) return;
+  currentEnvData = data.env || {};
+  currentEnvProcId = id;
+  const isAdmin = currentRole === 'admin';
+  const saveBtn = document.getElementById('btn-save-env');
+  saveBtn.style.display = isAdmin ? '' : 'none';
+  renderEnvTable(isAdmin, '');
   openModal('modal-env');
 }
 
 document.getElementById('btn-save-env').addEventListener('click', async () => {
-  const inputs = document.querySelectorAll('#env-content input[data-key]');
-  const env = {};
-  inputs.forEach((inp) => { env[inp.dataset.key] = inp.value; });
-  await api(`/api/processes/${currentEnvProcId}/env`, { method: 'PUT', body: JSON.stringify({ env }) }).catch((err) => alert(err.message));
+  await api(`/api/processes/${currentEnvProcId}/env`, { method: 'PUT', body: JSON.stringify({ env: currentEnvData }) }).catch((err) => alert(err.message));
   closeModal('modal-env');
   await loadProcesses();
 });
