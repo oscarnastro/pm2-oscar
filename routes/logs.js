@@ -70,7 +70,8 @@ router.get('/processes/:id/download', async (req, res) => {
       if (text) content += `${content ? '\n' : ''}=== stderr ===\n${text}`;
     }
 
-    const filename = `${proc.name || req.params.id}-${type}.txt`;
+    const safeName = (proc.name || req.params.id).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filename = `${safeName}-${type}.txt`;
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     return res.send(content || '');

@@ -283,10 +283,10 @@ function renderLogs() {
   if (!search) {
     logsEl.textContent = lines.map((l) => `[${l.type}] ${l.line}`).join('\n');
   } else {
-    const escaped = escapeHtml(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`(${escaped})`, 'gi');
+    const reEscaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(${reEscaped})`, 'gi');
     logsEl.innerHTML = lines
-      .map((l) => `[${l.type}] ${escapeHtml(l.line).replace(re, '<mark>$1</mark>')}`)
+      .map((l) => `[${escapeHtml(l.type)}] ${escapeHtml(l.line).replace(re, '<mark>$1</mark>')}`)
       .join('\n');
   }
   logsEl.scrollTop = logsEl.scrollHeight;

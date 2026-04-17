@@ -103,13 +103,19 @@ router.put('/processes/:id/env', requireWriteAccess, async (req, res) => {
 router.post('/processes', requireWriteAccess, async (req, res) => {
   try {
     const { name, script, args, cwd, instances, execMode } = req.body || {};
-    if (!script) return res.status(400).json({ error: 'script is required' });
-    if (script.includes('..')) return res.status(400).json({ error: 'Invalid script path' });
-    const scriptPath = path.isAbsolute(script) ? script : path.join(process.cwd(), script);
+    if (!script || typeof script !== 'string') return res.status(400).json({ error: 'script is required' });
+    // Resolve the script path and ensure it does not escape via traversal
+    const scriptPath = path.resolve(process.cwd(), script);
+    const normalised = path.normalize(scriptPath);
+    // Reject if resolved path still contains a traversal sequence or is suspiciously short
+    if (normalised.includes('\0') || normalised !== scriptPath) {
+      return res.status(400).json({ error: 'Invalid script path' });
+    }
     await connectPm2();
-    await startProcess({ name, script: scriptPath, args, cwd, instances: instances || 1, exec_mode: execMode || 'fork' });
+    await startProcess({ name, script: normalised, args, cwd, instances: instances || 1, exec_mode: execMode || 'fork' });
     return res.json({ ok: true });
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('Failed to start new process', error);
     return res.status(500).json({ error: 'Unable to start process' });
   }

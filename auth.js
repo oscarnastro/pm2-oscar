@@ -47,7 +47,8 @@ function bootstrapAdminUser() {
     const { hash, salt } = hashPassword(ADMIN_PASSWORD);
     const admin = { id: crypto.randomUUID(), username: ADMIN_USERNAME, hash, salt, role: 'admin', createdAt: Date.now() };
     persistUsers([admin]);
-    console.log(`Bootstrapped admin user: ${ADMIN_USERNAME}`);
+    // eslint-disable-next-line no-console
+    console.log('Bootstrapped initial admin user');
   }
 }
 
@@ -171,8 +172,7 @@ function requireAdmin(req, res, next) {
 
 function requireWriteAccess(req, res, next) {
   if (!req.session || !req.session.authenticated) return res.status(401).json({ error: 'Unauthorized' });
-  if (req.session.role !== 'admin' && req.session.role !== 'viewer') return res.status(403).json({ error: 'Forbidden' });
-  if (req.session.role === 'viewer') return res.status(403).json({ error: 'Forbidden: write access required' });
+  if (req.session.role !== 'admin') return res.status(403).json({ error: 'Forbidden: write access required' });
   return next();
 }
 
