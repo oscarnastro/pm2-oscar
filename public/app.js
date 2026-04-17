@@ -353,9 +353,14 @@ async function openDetailModal(id) {
 
 // ── Env modal ─────────────────────────────────────────────────────────────────
 
+let _envIsAdmin = false;
+let _envFilter = '';
+
 function renderEnvTable(isAdmin, filter) {
+  _envIsAdmin = isAdmin;
+  _envFilter = filter || '';
   const entries = Object.entries(currentEnvData);
-  const q = (filter || '').toLowerCase();
+  const q = _envFilter.toLowerCase();
   const filtered = q
     ? entries.filter(([k, v]) => k.toLowerCase().includes(q) || String(v).toLowerCase().includes(q))
     : entries;
@@ -370,26 +375,29 @@ function renderEnvTable(isAdmin, filter) {
     </tr>
   `).join('');
 
-  const countNote = `<p style="font-size:12px;color:var(--muted);margin:0 0 6px">${filtered.length} di ${entries.length} variabili</p>`;
-  const searchInput = `<input type="search" id="env-search" placeholder="Cerca variabile…" value="${escapeHtml(filter || '')}" style="width:100%;margin-bottom:8px;padding:6px 10px;box-sizing:border-box" />`;
+  const countNote = entries.length
+    ? `<p style="font-size:12px;color:var(--muted);margin:0 0 6px">${filtered.length} di ${entries.length} variabili</p>`
+    : '';
+  const searchInput = `<input type="search" id="env-search" placeholder="Cerca variabile…" value="${escapeHtml(_envFilter)}" style="width:100%;margin-bottom:8px;padding:6px 10px;box-sizing:border-box" />`;
   const tableHtml = rows
     ? `<div style="overflow-y:auto;max-height:50vh"><table class="env-table"><thead><tr><th>Chiave</th><th>Valore</th></tr></thead><tbody>${rows}</tbody></table></div>`
     : '<p style="color:var(--muted)">Nessun risultato</p>';
+  const emptyMsg = '<p style="color:var(--muted)">Nessuna variabile</p>';
 
-  document.getElementById('env-content').innerHTML = (entries.length ? countNote : '') + searchInput + (entries.length ? tableHtml : '<p style="color:var(--muted)">Nessuna variabile</p>');
+  document.getElementById('env-content').innerHTML = countNote + searchInput + (entries.length ? tableHtml : emptyMsg);
 
   const searchEl = document.getElementById('env-search');
-  if (searchEl) {
-    searchEl.focus();
-    searchEl.addEventListener('input', (e) => renderEnvTable(isAdmin, e.target.value));
-  }
-
-  if (isAdmin) {
-    document.querySelectorAll('#env-content input[data-key]').forEach((inp) => {
-      inp.addEventListener('input', () => { currentEnvData[inp.dataset.key] = inp.value; });
-    });
-  }
+  if (searchEl) searchEl.focus();
 }
+
+// Single delegated listener on the stable #env-content container
+document.getElementById('env-content').addEventListener('input', (e) => {
+  if (e.target.id === 'env-search') {
+    renderEnvTable(_envIsAdmin, e.target.value);
+  } else if (_envIsAdmin && e.target.dataset.key) {
+    currentEnvData[e.target.dataset.key] = e.target.value;
+  }
+});
 
 async function openEnvModal(id) {
   const data = await api(`/api/processes/${id}/env`).catch((err) => { alert(err.message); return null; });
