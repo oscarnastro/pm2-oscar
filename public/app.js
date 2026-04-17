@@ -355,6 +355,8 @@ async function openDetailModal(id) {
 
 let _envIsAdmin = false;
 let _envFilter = '';
+let _envFileExists = false;
+let _envCwd = '';
 
 function renderEnvTable(isAdmin, filter) {
   _envIsAdmin = isAdmin;
@@ -375,6 +377,12 @@ function renderEnvTable(isAdmin, filter) {
     </tr>
   `).join('');
 
+  const cwdNote = _envCwd
+    ? `<p style="font-size:11px;color:var(--muted);margin:0 0 6px;word-break:break-all">📁 ${escapeHtml(_envCwd)}/.env</p>`
+    : '';
+  const noFileWarning = !_envFileExists
+    ? `<p style="font-size:12px;color:var(--muted);margin:0 0 6px">⚠️ File <code>.env</code> non trovato in questa directory${isAdmin ? ' — verrà creato al salvataggio' : ''}.</p>`
+    : '';
   const countNote = entries.length
     ? `<p style="font-size:12px;color:var(--muted);margin:0 0 6px">${filtered.length} di ${entries.length} variabili</p>`
     : '';
@@ -384,7 +392,7 @@ function renderEnvTable(isAdmin, filter) {
     : '<p style="color:var(--muted)">Nessun risultato</p>';
   const emptyMsg = '<p style="color:var(--muted)">Nessuna variabile</p>';
 
-  document.getElementById('env-content').innerHTML = countNote + searchInput + (entries.length ? tableHtml : emptyMsg);
+  document.getElementById('env-content').innerHTML = cwdNote + noFileWarning + countNote + (entries.length ? searchInput + tableHtml : emptyMsg);
 
   const searchEl = document.getElementById('env-search');
   if (searchEl) searchEl.focus();
@@ -404,6 +412,8 @@ async function openEnvModal(id) {
   if (!data) return;
   currentEnvData = data.env || {};
   currentEnvProcId = id;
+  _envFileExists = data.envFileExists !== false;
+  _envCwd = data.cwd || '';
   const isAdmin = currentRole === 'admin';
   const saveBtn = document.getElementById('btn-save-env');
   saveBtn.style.display = isAdmin ? '' : 'none';
