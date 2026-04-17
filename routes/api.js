@@ -9,6 +9,35 @@ router.use(requireAuth);
 
 const SECRET_KEYS = /secret|password|pass|key|token|auth|credential/i;
 
+// PM2 internal metadata keys that should not be shown as process env vars
+const PM2_INTERNAL_KEYS = new Set([
+  'name', 'script', 'status', 'instances', 'exec_mode', 'restart_time',
+  'unstable_restarts', 'created_at', 'pm_id', 'pid', 'version', 'watch',
+  'autorestart', 'vizion', 'merge_logs', 'treekill', 'kill_timeout',
+  'listen_timeout', 'cron_restart', 'source_map_support', 'unique_id',
+  'exit_code', 'prev_restart_delay', 'versioning', 'node_version', 'env',
+  'args', 'cwd', 'interpreter', 'interpreter_args', 'filter_env',
+  'automation', 'pmx', 'username', 'uid', 'gid', 'exp_backoff_restart_delay'
+]);
+
+/**
+ * Extract user-facing environment variables from the pm2_env object.
+ * pm2_env.env only contains vars explicitly set in ecosystem.config.js,
+ * while pm2_env itself contains the full runtime environment (system vars,
+ * .env loaded by the app, etc.). We filter out PM2 internal fields.
+ */
+function extractEnv(pm2Env) {
+  if (!pm2Env || typeof pm2Env !== 'object') return {};
+  const result = {};
+  for (const [k, v] of Object.entries(pm2Env)) {
+    if (PM2_INTERNAL_KEYS.has(k)) continue;
+    if (k.startsWith('pm_') || k.startsWith('axm_') || k.startsWith('_')) continue;
+    if (v !== null && typeof v === 'object') continue; // skip nested objects
+    result[k] = v;
+  }
+  return result;
+}
+
 function maskEnv(env) {
   if (!env || typeof env !== 'object') return {};
   const masked = {};
@@ -52,7 +81,7 @@ router.get('/processes/:id/detail', async (req, res) => {
     await connectPm2();
     const proc = await describeProcess(req.params.id);
     if (!proc) return res.status(404).json({ error: 'Process not found' });
-    const env = maskEnv(proc.pm2_env?.env || {});
+    const env = maskEnv(extractEnv(proc.pm2_env));
     return res.json({
       id: proc.pm_id,
       name: proc.name,
@@ -80,7 +109,7 @@ router.get('/processes/:id/env', async (req, res) => {
     await connectPm2();
     const proc = await describeProcess(req.params.id);
     if (!proc) return res.status(404).json({ error: 'Process not found' });
-    return res.json({ env: maskEnv(proc.pm2_env?.env || {}) });
+    return res.json({ env: maskEnv(extractEnv(proc.pm2_env)) });
   } catch (error) {
     console.error('Failed to get env', error);
     return res.status(500).json({ error: 'Unable to get env' });
