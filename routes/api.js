@@ -129,14 +129,16 @@ router.get('/processes/:id/env', async (req, res) => {
 
 router.put('/processes/:id/env', requireWriteAccess, async (req, res) => {
   try {
-    const env = req.body?.env;
-    if (!env || typeof env !== 'object') return res.status(400).json({ error: 'env object required' });
+    const patch = req.body?.env;
+    if (!patch || typeof patch !== 'object') return res.status(400).json({ error: 'env object required' });
     await connectPm2();
     const proc = await describeProcess(req.params.id);
     if (!proc) return res.status(404).json({ error: 'Process not found' });
     const cwd = proc.pm2_env?.pm_cwd;
     if (!cwd) return res.status(400).json({ error: 'Process has no working directory' });
-    writeDotEnvFile(cwd, env);
+    const existing = readDotEnvFile(cwd) || {};
+    const merged = { ...existing, ...patch };
+    writeDotEnvFile(cwd, merged);
     await pm2Action('restart', req.params.id);
     return res.json({ ok: true });
   } catch (error) {

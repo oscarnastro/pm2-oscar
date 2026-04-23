@@ -357,6 +357,7 @@ let _envIsAdmin = false;
 let _envFilter = '';
 let _envFileExists = false;
 let _envCwd = '';
+let _dirtyEnvKeys = new Set();
 
 function renderEnvTable(isAdmin, filter) {
   _envIsAdmin = isAdmin;
@@ -404,6 +405,7 @@ document.getElementById('env-content').addEventListener('input', (e) => {
     renderEnvTable(_envIsAdmin, e.target.value);
   } else if (_envIsAdmin && e.target.dataset.key) {
     currentEnvData[e.target.dataset.key] = e.target.value;
+    _dirtyEnvKeys.add(e.target.dataset.key);
   }
 });
 
@@ -411,6 +413,7 @@ async function openEnvModal(id) {
   const data = await api(`/api/processes/${id}/env`).catch((err) => { alert(err.message); return null; });
   if (!data) return;
   currentEnvData = data.env || {};
+  _dirtyEnvKeys = new Set();
   currentEnvProcId = id;
   _envFileExists = data.envFileExists !== false;
   _envCwd = data.cwd || '';
@@ -422,7 +425,9 @@ async function openEnvModal(id) {
 }
 
 document.getElementById('btn-save-env').addEventListener('click', async () => {
-  await api(`/api/processes/${currentEnvProcId}/env`, { method: 'PUT', body: JSON.stringify({ env: currentEnvData }) }).catch((err) => alert(err.message));
+  const patch = {};
+  for (const k of _dirtyEnvKeys) patch[k] = currentEnvData[k];
+  await api(`/api/processes/${currentEnvProcId}/env`, { method: 'PUT', body: JSON.stringify({ env: patch }) }).catch((err) => alert(err.message));
   closeModal('modal-env');
   await loadProcesses();
 });
