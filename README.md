@@ -1,47 +1,47 @@
 # PM2 Oscar Dashboard
 
-Dashboard web **PM2** moderna, sicura e installabile come **PWA** (Progressive Web App), con supporto a **notifiche push** sul telefono quando un processo crasha o si ferma in modo imprevisto.
+A modern, secure **PM2** web dashboard installable as a **PWA** (Progressive Web App), with support for **push notifications** on your phone when a process crashes or stops unexpectedly.
 
-> Progettata per girare su **Node.js v22+**, gestita da PM2 stesso, accessibile da browser desktop e cellulare. Ideale dietro un reverse proxy come nginx o Caddy.
+> Designed to run on **Node.js v22+**, managed by PM2 itself, accessible from desktop and mobile browsers. Ideal behind a reverse proxy such as nginx or Caddy.
 
 ---
 
-## Sommario
+## Table of Contents
 
-- [Funzionalità](#funzionalità)
+- [Features](#features)
 - [Screenshot](#screenshot)
-- [Stack tecnico](#stack-tecnico)
-- [Requisiti](#requisiti)
-- [Installazione](#installazione)
-- [Configurazione .env](#configurazione-env)
-- [Generare le chiavi VAPID (push notifications)](#generare-le-chiavi-vapid)
-- [Avvio](#avvio)
-- [PWA: installare la dashboard sul telefono](#pwa-installare-la-dashboard-sul-telefono)
-- [Notifiche push: come funzionano](#notifiche-push-come-funzionano)
-- [Uso dietro reverse proxy](#uso-dietro-reverse-proxy)
-- [Struttura del progetto](#struttura-del-progetto)
-- [Variabili d'ambiente – riferimento completo](#variabili-dambiente--riferimento-completo)
-- [API REST – riferimento](#api-rest--riferimento)
-- [Sicurezza](#sicurezza)
+- [Tech Stack](#tech-stack)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [.env Configuration](#env-configuration)
+- [Generating VAPID Keys (push notifications)](#generating-vapid-keys)
+- [Starting the Dashboard](#starting-the-dashboard)
+- [PWA: Installing the Dashboard on Your Phone](#pwa-installing-the-dashboard-on-your-phone)
+- [Push Notifications: How They Work](#push-notifications-how-they-work)
+- [Behind a Reverse Proxy](#behind-a-reverse-proxy)
+- [Project Structure](#project-structure)
+- [Environment Variables – Full Reference](#environment-variables--full-reference)
+- [REST API – Reference](#rest-api--reference)
+- [Security](#security)
 - [FAQ](#faq)
 
 ---
 
-## Funzionalità
+## Features
 
-| Feature | Dettaglio |
+| Feature | Details |
 |---|---|
-| 📋 **Lista processi** | Stato (online / stopped / errored), CPU%, RAM, uptime, PID, numero restart |
-| ▶️ **Controllo processi** | Avvia, Ferma, Riavvia, Elimina ogni processo PM2 |
-| 📜 **Log viewer** | Ultimi N righe + streaming live via WebSocket; scelta 50/100/200 righe |
-| 🔐 **Login sicuro** | Username + password, sessione con cookie firmato (HttpOnly, SameSite=Strict) |
-| 🛡️ **Protezione brute-force** | Max 5 tentativi login / 10 minuti, poi blocco temporaneo |
-| 🔏 **CSRF protection** | Token anti-CSRF su tutte le richieste state-changing |
-| 📱 **PWA installabile** | `manifest.json` + Service Worker → si installa come app nativa su Android/iOS |
-| 🔔 **Notifiche push** | Avvisi istantanei sul telefono quando un processo crasha (exit code ≠ 0) |
-| 🌙 **UI dark glassmorphism** | Design moderno, mobile-first, sfondo scuro, badge animati, font Inter |
-| 🔌 **Porta configurabile** | Default `3003`, modificabile via `PORT` in `.env` |
-| 🔀 **Reverse proxy ready** | `trust proxy` abilitato, compatibile con nginx/Caddy e HTTPS |
+| 📋 **Process list** | Status (online / stopped / errored), CPU%, RAM, uptime, PID, restart count |
+| ▶️ **Process control** | Start, Stop, Restart, Delete any PM2 process |
+| 📜 **Log viewer** | Last N lines + live streaming via WebSocket; choose 50/100/200 lines |
+| 🔐 **Secure login** | Username + password, session with signed cookie (HttpOnly, SameSite=Strict) |
+| 🛡️ **Brute-force protection** | Max 5 login attempts / 10 minutes, then temporary lock |
+| 🔏 **CSRF protection** | Anti-CSRF token on all state-changing requests |
+| 📱 **Installable PWA** | `manifest.json` + Service Worker → installs as a native app on Android/iOS |
+| 🔔 **Push notifications** | Instant alerts on your phone when a process crashes (exit code ≠ 0) |
+| 🌙 **Dark glassmorphism UI** | Modern, mobile-first design, dark background, animated badges, Inter font |
+| 🔌 **Configurable port** | Default `3003`, changeable via `PORT` in `.env` |
+| 🔀 **Reverse proxy ready** | `trust proxy` enabled, compatible with nginx/Caddy and HTTPS |
 
 ---
 
@@ -51,219 +51,219 @@ Dashboard web **PM2** moderna, sicura e installabile come **PWA** (Progressive W
 
 ---
 
-## Stack tecnico
+## Tech Stack
 
 **Backend**
 - `Node.js v22+` – runtime
-- `express` – server HTTP
-- `express-session` – sessioni cookie firmate
-- `express-rate-limit` – protezione brute-force
-- `pm2` – API programmatica PM2 (lista, azioni, bus log/eventi)
-- `ws` – WebSocket per streaming log in real-time
-- `web-push` – invio notifiche push VAPID (PWA)
-- `dotenv` – gestione variabili d'ambiente
+- `express` – HTTP server
+- `express-session` – signed cookie sessions
+- `express-rate-limit` – brute-force protection
+- `pm2` – PM2 programmatic API (list, actions, log/event bus)
+- `ws` – WebSocket for real-time log streaming
+- `web-push` – VAPID push notification delivery (PWA)
+- `dotenv` – environment variable management
 
-**Frontend** (vanilla, nessun build step)
-- HTML/CSS/JS puro in `public/`
-- Service Worker (`sw.js`) per cache offline e ricezione push
-- Web Push API del browser per sottoscrizione notifiche
+**Frontend** (vanilla, no build step)
+- Plain HTML/CSS/JS in `public/`
+- Service Worker (`sw.js`) for offline cache and push reception
+- Browser Web Push API for notification subscription
 - Lucide icons via CDN, Inter font via Google Fonts
 
 ---
 
-## Requisiti
+## Requirements
 
-- **Node.js `v22.19.0`** o superiore
-- **PM2** installato globalmente: `npm install -g pm2`
-- Un dominio con **HTTPS** per le notifiche push in produzione (requisito del browser per le Web Push API)
+- **Node.js `v22.19.0`** or higher
+- **PM2** installed globally: `npm install -g pm2`
+- A domain with **HTTPS** for push notifications in production (browser requirement for Web Push API)
 
 ---
 
-## Installazione
+## Installation
 
 ```bash
-# 1. Clona il repository
+# 1. Clone the repository
 git clone https://github.com/oscarnastro/pm2-oscar.git
 cd pm2-oscar
 
-# 2. Installa le dipendenze
+# 2. Install dependencies
 npm install
 
-# 3. Crea il file .env dalla base di esempio
+# 3. Create the .env file from the example template
 cp .env.example .env
 ```
 
-Poi modifica `.env` con le tue credenziali (vedi sezione successiva).
+Then edit `.env` with your credentials (see the next section).
 
 ---
 
-## Configurazione .env
+## .env Configuration
 
 ```env
-# Porta su cui ascolta la dashboard (default: 3003)
+# Port the dashboard listens on (default: 3003)
 PORT=3003
 
-# Segreto per firmare i cookie di sessione
-# Cambia con una stringa random lunga (es. openssl rand -hex 32)
+# Secret used to sign session cookies
+# Replace with a long random string (e.g. openssl rand -hex 32)
 SESSION_SECRET=changeme_super_secret
 
-# Credenziali di accesso alla dashboard
+# Dashboard login credentials
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=changeme123
 
-# Usato come entropia per i token CSRF
-# Cambia con una stringa random (es. openssl rand -hex 32)
+# Used as entropy for CSRF tokens
+# Replace with a random string (e.g. openssl rand -hex 32)
 JWT_SECRET=changeme_jwt_secret
 
 # ── Push notifications (PWA) ─────────────────────────────────
-# Genera le chiavi con: npx web-push generate-vapid-keys
+# Generate keys with: npx web-push generate-vapid-keys
 VAPID_EMAIL=admin@example.com
 VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
 ```
 
-> **Sicurezza:** Non committare mai il file `.env` nel repository. È già incluso in `.gitignore`.
+> **Security:** Never commit the `.env` file to the repository. It is already listed in `.gitignore`.
 
 ---
 
-## Generare le chiavi VAPID
+## Generating VAPID Keys
 
-Le chiavi VAPID sono necessarie per inviare notifiche push al browser. Genera le chiavi una sola volta:
+VAPID keys are required to send push notifications to the browser. Generate them once:
 
 ```bash
 npx web-push generate-vapid-keys
 ```
 
-Output di esempio:
+Example output:
 ```
 =======================================
 Public Key:
-BH1c9aQ...lunga stringa...
+BH1c9aQ...long string...
 Private Key:
-mA3k...lunga stringa...
+mA3k...long string...
 =======================================
 ```
 
-Copia i valori nel tuo `.env`:
+Copy the values into your `.env`:
 ```env
 VAPID_PUBLIC_KEY=BH1c9aQ...
 VAPID_PRIVATE_KEY=mA3k...
 ```
 
-> Le chiavi devono rimanere **stabili**: se le rigeneri, tutti i dispositivi già sottoscritti perderanno le notifiche e dovranno ri-sottoscriversi.
+> The keys must remain **stable**: if you regenerate them, all previously subscribed devices will lose notifications and will need to re-subscribe.
 
 ---
 
-## Avvio
+## Starting the Dashboard
 
-### Locale (sviluppo)
+### Local (development)
 
 ```bash
 npm start
-# oppure
+# or
 node server.js
 ```
 
-Apri il browser su: `http://localhost:3003`
+Open your browser at: `http://localhost:3003`
 
-### Con PM2 (produzione)
+### With PM2 (production)
 
 ```bash
-# Avvia tramite la configurazione inclusa
+# Start using the included configuration
 pm2 start ecosystem.config.js
 
-# Salva la lista dei processi per il riavvio automatico
+# Save the process list for automatic restart
 pm2 save
 
-# Abilita l'avvio automatico al boot del sistema
+# Enable automatic startup on system boot
 pm2 startup
 ```
 
-Verifica che stia girando:
+Verify it is running:
 ```bash
 pm2 list
 pm2 logs pm2-oscar-dashboard
 ```
 
-Per aggiornare dopo una modifica al codice:
+To update after a code change:
 ```bash
 pm2 restart pm2-oscar-dashboard
 ```
 
 ---
 
-## PWA: installare la dashboard sul telefono
+## PWA: Installing the Dashboard on Your Phone
 
-La dashboard è una **Progressive Web App** installabile. Funziona su Android (Chrome) e iOS (Safari).
+The dashboard is an installable **Progressive Web App**. It works on Android (Chrome) and iOS (Safari).
 
 ### Android (Chrome)
 
-1. Apri la dashboard in Chrome (HTTPS obbligatorio in produzione)
-2. Tocca il menu `⋮` → **Aggiungi a schermata Home** (o segui il banner automatico)
-3. La dashboard si apre come app nativa, senza barra del browser
+1. Open the dashboard in Chrome (HTTPS required in production)
+2. Tap the `⋮` menu → **Add to Home Screen** (or follow the automatic banner)
+3. The dashboard opens as a native app, without the browser bar
 
 ### iOS (Safari)
 
-1. Apri la dashboard in Safari
-2. Tocca l'icona **Condividi** → **Aggiungi a schermata Home**
-3. Conferma il nome e tocca **Aggiungi**
+1. Open the dashboard in Safari
+2. Tap the **Share** icon → **Add to Home Screen**
+3. Confirm the name and tap **Add**
 
-> **Nota:** Le notifiche push su iOS richiedono iOS 16.4+ con Safari e sono supportate solo se la PWA è installata.
-
----
-
-## Notifiche push: come funzionano
-
-```
-[PM2 process crasha]
-       │
-       ▼
-[PM2 Bus emette process:event con exit_code ≠ 0]
-       │
-       ▼
-[server.js rileva il crash]
-       │
-       ▼
-[push-service.js invia notifica via web-push a tutti i device sottoscritti]
-       │
-       ▼
-[Service Worker del browser riceve il push e mostra la notifica]
-       │
-       ▼
-[Tocco sulla notifica → apre la dashboard]
-```
-
-### Attivare le notifiche dal browser
-
-1. Accedi alla dashboard
-2. Clicca il bottone **campanella** 🔔 in alto a destra nella navbar
-3. Il browser chiederà il permesso per le notifiche → clicca **Consenti**
-4. La campanella diventa viola (attiva)
-
-### Quando arriva una notifica
-
-Riceverai una notifica push quando:
-- Un processo si ferma con **exit code ≠ 0** (crash inatteso)
-- Un processo va in stato **error**
-
-**Non** riceverai notifiche per:
-- Stop manuali dalla dashboard (exit code 0)
-- Restart pianificati
-
-### Disattivare le notifiche
-
-Clicca di nuovo la campanella per disiscriverti. Oppure revoca il permesso nelle impostazioni del browser.
+> **Note:** Push notifications on iOS require iOS 16.4+ with Safari and are only supported when the PWA is installed.
 
 ---
 
-## Uso dietro reverse proxy
+## Push Notifications: How They Work
+
+```
+[PM2 process crashes]
+       │
+       ▼
+[PM2 Bus emits process:event with exit_code ≠ 0]
+       │
+       ▼
+[server.js detects the crash]
+       │
+       ▼
+[push-service.js sends notification via web-push to all subscribed devices]
+       │
+       ▼
+[Browser Service Worker receives the push and shows the notification]
+       │
+       ▼
+[Tap on notification → opens the dashboard]
+```
+
+### Enabling Notifications from the Browser
+
+1. Log in to the dashboard
+2. Click the **bell** button 🔔 in the top-right of the navbar
+3. The browser will ask for notification permission → click **Allow**
+4. The bell turns purple (active)
+
+### When You Receive a Notification
+
+You will receive a push notification when:
+- A process stops with **exit code ≠ 0** (unexpected crash)
+- A process enters the **error** state
+
+You will **not** receive notifications for:
+- Manual stops from the dashboard (exit code 0)
+- Scheduled restarts
+
+### Disabling Notifications
+
+Click the bell again to unsubscribe. Alternatively, revoke the permission in your browser settings.
+
+---
+
+## Behind a Reverse Proxy
 
 ### Nginx
 
 ```nginx
 server {
     listen 443 ssl;
-    server_name dashboard.tuodominio.it;
+    server_name dashboard.yourdomain.com;
 
     ssl_certificate     /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
@@ -288,7 +288,7 @@ server {
 # Redirect HTTP → HTTPS
 server {
     listen 80;
-    server_name dashboard.tuodominio.it;
+    server_name dashboard.yourdomain.com;
     return 301 https://$host$request_uri;
 }
 ```
@@ -296,141 +296,141 @@ server {
 ### Caddy
 
 ```caddyfile
-dashboard.tuodominio.it {
+dashboard.yourdomain.com {
     reverse_proxy 127.0.0.1:3003
 }
 ```
 
-Caddy gestisce automaticamente TLS (Let's Encrypt) e gli header `X-Forwarded-*`.
+Caddy automatically handles TLS (Let's Encrypt) and `X-Forwarded-*` headers.
 
-> La dashboard ha già `app.set('trust proxy', 1)` abilitato, quindi legge correttamente IP e schema dal proxy.
+> The dashboard already has `app.set('trust proxy', 1)` enabled, so it correctly reads the IP and scheme from the proxy.
 
 ---
 
-## Struttura del progetto
+## Project Structure
 
 ```
 pm2-oscar/
-├── server.js              # Entry point Express + WebSocket + PM2 bus
-├── auth.js                # Middleware sessione, requireAuth, validazione credenziali
-├── pm2-client.js          # Wrapper PM2 (connect, list, action, describe, bus)
-├── push-service.js        # VAPID setup, gestione subscription, invio push
+├── server.js              # Express + WebSocket + PM2 bus entry point
+├── auth.js                # Session middleware, requireAuth, credential validation
+├── pm2-client.js          # PM2 wrapper (connect, list, action, describe, bus)
+├── push-service.js        # VAPID setup, subscription management, push delivery
 ├── routes/
-│   ├── api.js             # REST API processi PM2 (list, start, stop, restart, delete)
-│   ├── logs.js            # Tail log (ultimi N righe)
-│   └── push.js            # API sottoscrizione push, chiave pubblica VAPID
+│   ├── api.js             # PM2 process REST API (list, start, stop, restart, delete)
+│   ├── logs.js            # Log tail (last N lines)
+│   └── push.js            # Push subscription API, VAPID public key
 ├── public/
-│   ├── index.html         # Dashboard principale (protetta da login)
-│   ├── login.html         # Pagina di login
-│   ├── style.css          # CSS dark/glassmorphism
-│   ├── app.js             # Logica frontend (processi, log, SW, push)
+│   ├── index.html         # Main dashboard (protected by login)
+│   ├── login.html         # Login page
+│   ├── style.css          # Dark/glassmorphism CSS
+│   ├── app.js             # Frontend logic (processes, logs, SW, push)
 │   ├── sw.js              # Service Worker (cache + push handler)
 │   ├── manifest.json      # Web App Manifest (PWA)
 │   └── icons/
-│       ├── icon-192.svg   # Icona PWA 192x192
-│       ├── icon-512.svg   # Icona PWA 512x512
-│       └── badge-72.svg   # Badge notifiche 72x72
+│       ├── icon-192.svg   # PWA icon 192x192
+│       ├── icon-512.svg   # PWA icon 512x512
+│       └── badge-72.svg   # Notification badge 72x72
 ├── data/
-│   └── subscriptions.json # Sottoscrizioni push (auto-generato, gitignored)
-├── .env.example           # Template variabili d'ambiente
+│   └── subscriptions.json # Push subscriptions (auto-generated, gitignored)
+├── .env.example           # Environment variable template
 ├── .gitignore
-├── ecosystem.config.js    # Configurazione PM2 per avviare la dashboard
+├── ecosystem.config.js    # PM2 configuration to run the dashboard
 └── package.json
 ```
 
 ---
 
-## Variabili d'ambiente – riferimento completo
+## Environment Variables – Full Reference
 
-| Variabile | Default | Obbligatoria | Descrizione |
+| Variable | Default | Required | Description |
 |---|---|---|---|
-| `PORT` | `3003` | No | Porta su cui ascolta il server |
-| `SESSION_SECRET` | `changeme_super_secret` | **Sì** | Segreto per firmare i cookie di sessione |
-| `ADMIN_USERNAME` | `admin` | **Sì** | Username per l'accesso alla dashboard |
-| `ADMIN_PASSWORD` | `changeme123` | **Sì** | Password per l'accesso alla dashboard |
-| `JWT_SECRET` | `changeme_jwt_secret` | **Sì** | Entropia per i token CSRF |
-| `VAPID_EMAIL` | `admin@example.com` | No | Email per le notifiche push (formato `mailto:`) |
-| `VAPID_PUBLIC_KEY` | _(vuoto)_ | Per push | Chiave pubblica VAPID |
-| `VAPID_PRIVATE_KEY` | _(vuoto)_ | Per push | Chiave privata VAPID |
-| `NODE_ENV` | _(non impostato)_ | No | Imposta `production` per abilitare il flag `secure` sui cookie |
+| `PORT` | `3003` | No | Port the server listens on |
+| `SESSION_SECRET` | `changeme_super_secret` | **Yes** | Secret for signing session cookies |
+| `ADMIN_USERNAME` | `admin` | **Yes** | Dashboard login username |
+| `ADMIN_PASSWORD` | `changeme123` | **Yes** | Dashboard login password |
+| `JWT_SECRET` | `changeme_jwt_secret` | **Yes** | Entropy for CSRF tokens |
+| `VAPID_EMAIL` | `admin@example.com` | No | Email for push notifications (`mailto:` format) |
+| `VAPID_PUBLIC_KEY` | _(empty)_ | For push | VAPID public key |
+| `VAPID_PRIVATE_KEY` | _(empty)_ | For push | VAPID private key |
+| `NODE_ENV` | _(unset)_ | No | Set to `production` to enable the `secure` flag on cookies |
 
-> Se `VAPID_PUBLIC_KEY` o `VAPID_PRIVATE_KEY` sono vuoti, le notifiche push vengono disabilitate gracefully. La dashboard funziona normalmente.
+> If `VAPID_PUBLIC_KEY` or `VAPID_PRIVATE_KEY` are empty, push notifications are gracefully disabled. The dashboard works normally.
 
 ---
 
-## API REST – riferimento
+## REST API – Reference
 
-Tutte le API richiedono autenticazione (sessione attiva). Le richieste non-GET richiedono l'header `x-csrf-token`.
+All APIs require authentication (active session). Non-GET requests require the `x-csrf-token` header.
 
-### Autenticazione
+### Authentication
 
-| Metodo | Endpoint | Descrizione |
+| Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/auth/csrf` | Restituisce il token CSRF per la sessione corrente |
+| `GET` | `/auth/csrf` | Returns the CSRF token for the current session |
 | `POST` | `/auth/login` | Login. Body: `{ username, password }`. Rate-limited: 5 req/10min |
-| `POST` | `/auth/logout` | Logout, distrugge la sessione |
+| `POST` | `/auth/logout` | Logout, destroys the session |
 
-### Processi PM2
+### PM2 Processes
 
-| Metodo | Endpoint | Descrizione |
+| Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/processes` | Lista tutti i processi PM2 |
-| `POST` | `/api/processes/:id/start` | Avvia il processo |
-| `POST` | `/api/processes/:id/stop` | Ferma il processo |
-| `POST` | `/api/processes/:id/restart` | Riavvia il processo |
-| `DELETE` | `/api/processes/:id` | Elimina il processo da PM2 |
+| `GET` | `/api/processes` | List all PM2 processes |
+| `POST` | `/api/processes/:id/start` | Start the process |
+| `POST` | `/api/processes/:id/stop` | Stop the process |
+| `POST` | `/api/processes/:id/restart` | Restart the process |
+| `DELETE` | `/api/processes/:id` | Delete the process from PM2 |
 
-### Log
+### Logs
 
-| Metodo | Endpoint | Descrizione |
+| Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/logs/processes/:id/tail?lines=N` | Ultime N righe di log (max 500) |
-| `WebSocket` | `ws://host/ws/logs?processId=N` | Streaming log in real-time |
+| `GET` | `/logs/processes/:id/tail?lines=N` | Last N log lines (max 500) |
+| `WebSocket` | `ws://host/ws/logs?processId=N` | Real-time log streaming |
 
 ### Push Notifications
 
-| Metodo | Endpoint | Descrizione |
+| Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/push/status` | Controlla se le push sono configurate |
-| `GET` | `/api/push/vapid-public-key` | Restituisce la chiave pubblica VAPID |
-| `POST` | `/api/push/subscribe` | Salva una sottoscrizione push |
-| `DELETE` | `/api/push/subscribe` | Rimuove una sottoscrizione push |
+| `GET` | `/api/push/status` | Check whether push notifications are configured |
+| `GET` | `/api/push/vapid-public-key` | Returns the VAPID public key |
+| `POST` | `/api/push/subscribe` | Save a push subscription |
+| `DELETE` | `/api/push/subscribe` | Remove a push subscription |
 
 ---
 
-## Sicurezza
+## Security
 
-- **Sessioni**: cookie `HttpOnly`, `SameSite=Strict`, `secure` in produzione
-- **Brute-force**: rate limiting sul login (5 tentativi / 10 minuti)
-- **CSRF**: token anti-CSRF generato per sessione, richiesto su tutte le richieste non-GET
-- **Errori API**: messaggi generici al client, dettagli loggati solo server-side
-- **Reverse proxy**: `trust proxy` abilitato, supporta header `X-Forwarded-*`
-- **VAPID**: solo la chiave pubblica è esposta al client
-- **Abbonamenti push**: le sottoscrizioni scadute/invalide vengono rimosse automaticamente
+- **Sessions**: `HttpOnly`, `SameSite=Strict` cookies, `secure` flag in production
+- **Brute-force**: rate limiting on login (5 attempts / 10 minutes)
+- **CSRF**: per-session anti-CSRF token, required on all non-GET requests
+- **API errors**: generic messages to the client, details logged server-side only
+- **Reverse proxy**: `trust proxy` enabled, supports `X-Forwarded-*` headers
+- **VAPID**: only the public key is exposed to the client
+- **Push subscriptions**: expired/invalid subscriptions are removed automatically
 
-> **Raccomandazione**: in produzione usa sempre HTTPS. Genera segreti forti con `openssl rand -hex 32`.
+> **Recommendation**: always use HTTPS in production. Generate strong secrets with `openssl rand -hex 32`.
 
 ---
 
 ## FAQ
 
-**Le notifiche arrivano anche quando chiudo il browser?**
-Sì, il Service Worker rimane attivo in background (su Android/Chrome). Su iOS richiedono iOS 16.4+ con la PWA installata.
+**Do notifications arrive even when I close the browser?**
+Yes, the Service Worker stays active in the background (on Android/Chrome). On iOS they require iOS 16.4+ with the PWA installed.
 
-**Il server devo tenerlo sempre acceso?**
-Sì, le notifiche vengono inviate dal server (non dal browser). Se il server è spento, le notifiche non vengono inviate.
+**Does the server need to stay on all the time?**
+Yes, notifications are sent from the server (not the browser). If the server is off, no notifications will be sent.
 
-**Posso avere più utenti?**
-Al momento supporta un solo utente admin. Per multi-utente bisognerebbe estendere `auth.js` con un sistema di account.
+**Can I have multiple users?**
+Currently only a single admin user is supported. For multi-user support, `auth.js` would need to be extended with an account system.
 
-**Le sottoscrizioni push sopravvivono al riavvio del server?**
-Sì, vengono salvate in `data/subscriptions.json` (escluso da git).
+**Do push subscriptions survive a server restart?**
+Yes, they are saved in `data/subscriptions.json` (excluded from git).
 
-**Come aggiorno la dashboard senza perdere i processi PM2?**
+**How do I update the dashboard without losing PM2 processes?**
 ```bash
 pm2 reload pm2-oscar-dashboard
 ```
-`reload` esegue un graceful restart senza downtime.
+`reload` performs a graceful restart with no downtime.
 
-**Cosa succede se le chiavi VAPID cambiano?**
-I device precedentemente sottoscritti perderanno le notifiche. Elimina `data/subscriptions.json` e chiedi agli utenti di ri-attivare la campanella.
+**What happens if the VAPID keys change?**
+Previously subscribed devices will lose notifications. Delete `data/subscriptions.json` and ask users to re-enable the bell.
